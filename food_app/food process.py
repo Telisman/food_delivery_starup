@@ -5,6 +5,23 @@ import os
 import numpy as np
 import pandas as pd
 
+
+TYPE_MAPPING = {
+    'int64': np.int64,
+    'int32': np.int32,
+    'int16': np.int16,
+    'int8': np.int8,
+    'uint64': np.uint64,
+    'uint32': np.uint32,
+    'uint16': np.uint16,
+    'uint8': np.uint8,
+    'float64': np.float64,
+    'float32': np.float32,
+    'object': object,
+    'datetime64[ns]': np.datetime64,
+}
+
+
 # List of all tables used in the original database
 TABLES = [
     "addresses",
@@ -42,7 +59,17 @@ MultiDimDatabase = namedtuple(
         "users",
     ],
 )
-
+ReducedDatabase = namedtuple(
+    "ReducedDatabase",
+    [
+        "orders",
+        "users",
+        "food",
+        "promos",
+        "restaurants",
+        "addresses",
+    ],
+)
 
 # --- Task #1 ---
 def load_tables(tables_dir_path: Path, tables: List[str]) -> List[pd.DataFrame]:
@@ -67,6 +94,46 @@ def load_tables(tables_dir_path: Path, tables: List[str]) -> List[pd.DataFrame]:
 
     return dataframes# Call the function to load and print the DataFrames
 
+
+def reduce_dims(db: MultiDimDatabase) -> ReducedDatabase:
+    reduced_db = {}
+    allowed_tables = ["orders", "users", "food", "promos", "restaurants", "addresses"]
+
+    for table_name in allowed_tables:
+        if hasattr(db, table_name):
+            df = getattr(db, table_name)
+            reduced_df = df.copy()
+            reduced_df = reduced_df.astype({col: TYPE_MAPPING[str(col_type)] for col, col_type in df.dtypes.items()})
+            reduced_db[table_name] = reduced_df
+
+    return ReducedDatabase(**reduced_db)
+
+loaded_dataframes = load_tables(TABLES_DIR_PATH, TABLES)
+
+# Create a MultiDimDatabase instance with the loaded DataFrames
+db = MultiDimDatabase(
+    addresses=loaded_dataframes[0],
+    birthdates=loaded_dataframes[1],
+    cities=loaded_dataframes[2],
+    countries=loaded_dataframes[3],
+    cuisines=loaded_dataframes[4],
+    districts=loaded_dataframes[5],
+    food=loaded_dataframes[6],
+    orders=loaded_dataframes[7],
+    promos=loaded_dataframes[8],
+    restaurants=loaded_dataframes[9],
+    states=loaded_dataframes[10],
+    users=loaded_dataframes[11],
+)
+
+# Reducing the database
+reduced_data = reduce_dims(db)
+
+# Printing the reduced data
+for table_name, df in reduced_data._asdict().items():
+    print(f"Table: {table_name}")
+    print(df)
+    print("\n")
 
 loaded_dataframes = load_tables(TABLES_DIR_PATH, TABLES)
 
