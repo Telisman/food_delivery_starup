@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 
-
+# Define the mapping of column types
 TYPE_MAPPING = {
     'int64': np.int64,
     'int32': np.int32,
@@ -20,7 +20,6 @@ TYPE_MAPPING = {
     'object': object,
     'datetime64[ns]': np.datetime64,
 }
-
 
 # List of all tables used in the original database
 TABLES = [
@@ -59,6 +58,8 @@ MultiDimDatabase = namedtuple(
         "users",
     ],
 )
+
+# Structure holding reduced database
 ReducedDatabase = namedtuple(
     "ReducedDatabase",
     [
@@ -71,7 +72,6 @@ ReducedDatabase = namedtuple(
     ],
 )
 
-# --- Task #1 ---
 def load_tables(tables_dir_path: Path, tables: List[str]) -> List[pd.DataFrame]:
     dataframes = []
     for table in tables:
@@ -92,8 +92,7 @@ def load_tables(tables_dir_path: Path, tables: List[str]) -> List[pd.DataFrame]:
 
         dataframes.append(df)
 
-    return dataframes# Call the function to load and print the DataFrames
-
+    return dataframes
 
 def reduce_dims(db: MultiDimDatabase) -> ReducedDatabase:
     reduced_db = {}
@@ -108,6 +107,52 @@ def reduce_dims(db: MultiDimDatabase) -> ReducedDatabase:
 
     return ReducedDatabase(**reduced_db)
 
+def create_orders_by_meal_type_age_cuisine_table(db: MultiDimDatabase) -> pd.DataFrame:
+    # Extracting required information from the tables
+    orders_df = db.orders
+    birthdates_df = db.birthdates
+    food_df = db.food
+
+    # Mapping meal types based on order time
+    def get_meal_type(order_time):
+        if 6 <= order_time.hour < 10:
+            return 'breakfast'
+        elif 10 <= order_time.hour <= 16:
+            return 'lunch'
+        else:
+            return 'dinner'
+
+    # Mapping user age groups based on birth year
+    def get_user_age_group(year):
+        if year >= 1995:
+            return 'young'
+        elif 1970 <= year < 1995:
+            return 'adult'
+        else:
+            return 'old'
+
+    # Adding columns 'meal_type' and 'user_age' to the orders_df
+    orders_df['ordered_at'] = pd.to_datetime(orders_df['ordered_at'])  # Corrected column name
+    orders_df['meal_type'] = orders_df['ordered_at'].apply(get_meal_type)
+    orders_df['user_age'] = birthdates_df['year'].apply(get_user_age_group)  # Corrected column name
+
+    # Merging orders_df with food_df to get 'food_cuisine'
+    orders_by_meal_type_age_cuisine_df = orders_df.merge(food_df[['food_id', 'cuisine_id']], on='food_id', how='left')
+    orders_by_meal_type_age_cuisine_df = orders_by_meal_type_age_cuisine_df[['order_id', 'meal_type', 'user_age', 'cuisine_id']]
+
+    return orders_by_meal_type_age_cuisine_df.sort_values('order_id').reset_index(drop=True)
+
+
+
+
+
+
+
+
+
+
+
+# Call the function to load and print the DataFrames
 loaded_dataframes = load_tables(TABLES_DIR_PATH, TABLES)
 
 # Create a MultiDimDatabase instance with the loaded DataFrames
@@ -126,19 +171,24 @@ db = MultiDimDatabase(
     users=loaded_dataframes[11],
 )
 
+# Printing the original loaded data
+for table_name, df in zip(TABLES, loaded_dataframes):
+    print(f"Table: {table_name}")
+    print(df)
+    print("\n")
+
 # Reducing the database
 reduced_data = reduce_dims(db)
-
+#
 # Printing the reduced data
 for table_name, df in reduced_data._asdict().items():
     print(f"Table: {table_name}")
     print(df)
     print("\n")
 
-loaded_dataframes = load_tables(TABLES_DIR_PATH, TABLES)
+# Creating the orders_by_meal_type_age_cuisine table
+orders_by_meal_type_age_cuisine_table = create_orders_by_meal_type_age_cuisine_table(db)
 
-for table_name, df in zip(TABLES, loaded_dataframes):
-    print(f"Table: {table_name}")
-    print(df)
-    print("\n")
-
+# Printing the orders_by_meal_type_age_cuisine table
+print("Columns of the 'orders' DataFrame:")
+print(loaded_dataframes[7].columns)
